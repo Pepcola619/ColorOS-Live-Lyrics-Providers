@@ -14,6 +14,7 @@ object UniversalBindingStore {
     private var lastBindingText: String? = null
 
     private val DEFAULT_MUSIC_PACKAGES = setOf(
+        "ru.yandex.music",
         "com.salt.music",
         "com.apple.android.music",
         "com.spotify.music",
@@ -27,7 +28,7 @@ object UniversalBindingStore {
         if (!prefs.getBoolean(KEY_FIRST_INIT, false)) {
             val pm = context.packageManager
             val installed = DEFAULT_MUSIC_PACKAGES.filter { pkg ->
-                runCatching { pm.getPackageInfo(pkg, 0) }.isSuccess
+                pkg == "ru.yandex.music" || runCatching { pm.getPackageInfo(pkg, 0) }.isSuccess
             }.toSet().let(PlayerBindingPolicy::sanitize)
             prefs.edit()
                 .putBoolean(KEY_FIRST_INIT, true)
@@ -36,7 +37,8 @@ object UniversalBindingStore {
             return installed
         }
         val stored = prefs.getStringSet(KEY_BOUND_PACKAGES, emptySet()) ?: emptySet()
-        val sanitized = PlayerBindingPolicy.sanitize(stored)
+        val withYandex = if (stored.isEmpty()) stored + "ru.yandex.music" else stored
+        val sanitized = PlayerBindingPolicy.sanitize(withYandex)
         if (sanitized != stored) {
             prefs.edit().putStringSet(KEY_BOUND_PACKAGES, sanitized).apply()
         }
@@ -75,6 +77,7 @@ object UniversalBindingStore {
         )
         UniversalBridgeBindingNotifier.notify(context, packages)
     }
+
     fun persistAppBindingFile(context: Context, packages: Set<String>) {
         val sanitized = PlayerBindingPolicy.sanitize(packages)
         runCatching {
