@@ -8,6 +8,7 @@ import io.github.andrealtb.coloroslyrics.provider.universal.LyricsSourceConfigSt
 import io.github.andrealtb.coloroslyrics.provider.universal.UniversalLyricPayloadPolicy
 import io.github.andrealtb.coloroslyrics.provider.universal.UniversalSettingsConstants
 import io.github.andrealtb.coloroslyrics.provider.universal.api.LyricsSourceAggregator
+import io.github.andrealtb.coloroslyrics.provider.universal.api.MusixmatchSource
 import io.github.andrealtb.coloroslyrics.provider.universal.api.TrackQuery
 import io.github.andrealtb.coloroslyrics.provider.universal.api.UnisonTranslationSource
 import io.github.andrealtb.coloroslyrics.provider.universal.cache.UniversalLyricCache
@@ -21,7 +22,9 @@ import java.util.concurrent.Executors
 
 class UniversalLyricEngine(
     private val context: Context,
-    private val aggregator: LyricsSourceAggregator = LyricsSourceAggregator()
+    private val aggregator: LyricsSourceAggregator = LyricsSourceAggregator(
+        musixmatchSource = MusixmatchSource(OkHttpClient()) { context }
+    )
 ) {
     private val executor = Executors.newSingleThreadExecutor()
     @Volatile
@@ -81,6 +84,18 @@ class UniversalLyricEngine(
                     }
                 }
 
+                val mergedLyric = if (translationOn && !finalTranslation.isNullOrBlank()) {
+                    mergeOriginalAndTranslation(result.lyric, finalTranslation)
+                } else {
+                    result.lyric
+                }
+
+                val sourceTag = if (translationOn && !finalTranslation.isNullOrBlank()) {
+                    "${result.source}+$targetLang"
+                } else {
+                    result.source
+                }
+
                 val json = JSONObject().apply {
                     put("songName", result.title)
                     put("artist", result.artist)
@@ -89,16 +104,17 @@ class UniversalLyricEngine(
                     put("lyricType", 0)
                     put("id", "")
                     put("noLyric", false)
-                    put("lyric", result.lyric)
-                    put("rawLyric", result.rawLyric ?: result.lyric)
-                    UniversalLyricPayloadPolicy.putTtmlAndFormat(this, result)
+                    put("lyric", mergedLyric)
+                    put("rawLyric", mergedLyric)
                     if (translationOn && !finalTranslation.isNullOrBlank()) {
                         put("transLyric", finalTranslation)
                         put("translationLyric", finalTranslation)
                         put("translationLanguageTag", Locale.forLanguageTag(targetLang).toLanguageTag())
+                    } else {
+                        UniversalLyricPayloadPolicy.putTtmlAndFormat(this, result)
                     }
                     put("provider", "io.github.andrealtb.coloroslyrics.provider.universal")
-                    put("source", result.source)
+                    put("source", sourceTag)
                     put("sessionGeneration", generation)
                     put("remark", "[CLLUniversal]")
                 }.toString()
@@ -109,8 +125,48 @@ class UniversalLyricEngine(
         }
     }
 
+    private fun mergeOriginalAndTranslation(originalLrc: String, translationLrc: String): String {
+        val timeRegex = Regex("^(\\[\\d{1,2}:\\d{2}(?:\\.\\d{1,3})?\\])+")
+        val transMap = LinkedHashMap<String, String>()
+        val transPlainLines = mutableListOf<String>()
+
+        for (line in translationLrc.lines()) {
+            val trimmed = line.trim()
+            if (trimmed.isBlank()) continue
+            val match = timeRegex.find(trimmed)
+            val tag = match?.value.orEmpty()
+            val body = trimmed.removePrefix(tag).trim()
+            if (body.isNotBlank() && !body.startsWith("[")) {
+                if (tag.isNotEmpty()) {
+                    transMap[tag] = body
+                }
+                transPlainLines.add(body)
+            }
+        }
+
+        var plainIdx = 0
+        return originalLrc.lines().joinToString("\n") { line ->
+            val trimmed = line.trim()
+            val match = timeRegex.find(trimmed)
+            val tag = match?.value.orEmpty()
+            val body = trimmed.removePrefix(tag).trim()
+
+            if (tag.isNotEmpty() && body.isNotBlank() && !body.startsWith("[")) {
+                val tr = transMap[tag] ?: transPlainLines.getOrNull(plainIdx)
+                plainIdx++
+                if (!tr.isNullOrBlank() && !tr.equals(body, ignoreCase = true)) {
+                    "$tag$body\n$tr"
+                } else {
+                    line
+                }
+            } else {
+                line
+            }
+        }
+    }
+
     private fun translateLrcViaGoogle(client: OkHttpClient, lrc: String, targetLang: String): String? = runCatching {
-        val timeRegex = Regex("""^(\[\d{1,2}:\d{2}(?:\.\d{1,3})?\])+""")
+        val timeRegex = Regex("^(\\[\\d{1,2}:\\d{2}(?:\\.\\d{1,3})?\\])+")
         val lines = lrc.lines()
         val prefixes = mutableListOf<String>()
         val textsToTranslate = mutableListOf<String>()
