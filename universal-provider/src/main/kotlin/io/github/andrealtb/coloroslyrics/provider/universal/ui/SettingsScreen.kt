@@ -96,6 +96,7 @@ fun SettingsScreen(
     fun updateConfig() {
         val settings = ProcessingSettings(
             translationEnabled,
+            swapTranslationEnabled,
             translationLang,
             mxmToken.trim(),
             wordTimingEnabled,
@@ -186,8 +187,8 @@ fun SettingsScreen(
 
         Text(stringResource(R.string.section_lyric_processing), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
 
-        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-         ListItem(
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {            
+            ListItem(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 72.dp)
@@ -207,6 +208,28 @@ fun SettingsScreen(
                     )
                 }
             )
+
+                 ListItem(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 72.dp)
+                .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 8.dp, bottomEnd = 8.dp)),
+            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+            leadingContent = { Icon(Icons.Filled.Translate, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+            headlineContent = { Text(stringResource(R.string.inject_translation), style = MaterialTheme.typography.bodyLarge) },
+            supportingContent = { Text(stringResource(R.string.inject_translation_desc), style = MaterialTheme.typography.bodySmall) },
+            trailingContent = {
+                Switch(
+                    checked = translationEnabled,
+                    enabled = settingsLoaded,
+                    onCheckedChange = {
+                        translationEnabled = it
+                        updateConfig()
+                    }
+                )
+            }
+        )
+
 
 
             Surface(
