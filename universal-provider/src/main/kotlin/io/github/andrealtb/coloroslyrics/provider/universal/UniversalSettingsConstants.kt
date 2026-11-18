@@ -8,6 +8,7 @@ object UniversalSettingsConstants {
     const val KEY_WORD_TIMING = "word_timing"
     const val KEY_TRANSLATION = "translation_enabled"
     const val KEY_TRANSLATION_LANG = "translation_target_lang"
+    const val KEY_MUSIXMATCH_TOKEN = "musixmatch_user_token"
     const val KEY_RAW_LYRIC = "raw_lyric_enabled"
     const val KEY_DEBUG = "debug_enabled"
     const val KEY_CLOCK_LINE_FALLBACK = "clock_line_fallback_enabled"
@@ -20,5 +21,12 @@ object UniversalSettingsConstants {
         }.getOrNull().orEmpty().trim()
         if (saved.isNotBlank() && saved != "system") return saved
         return Locale.getDefault().language.ifBlank { "ru" }
+    }
+
+    fun getCustomMusixmatchToken(context: Context?): String? {
+        return runCatching {
+            context?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                ?.getString(KEY_MUSIXMATCH_TOKEN, null)
+        }.getOrNull()?.trim()?.takeIf { it.isNotBlank() }
     }
 }
