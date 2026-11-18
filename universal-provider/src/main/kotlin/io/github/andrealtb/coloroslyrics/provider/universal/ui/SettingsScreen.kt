@@ -31,6 +31,7 @@ import kotlinx.coroutines.withContext
 private data class ProcessingSettings(
     val translation: Boolean,
     val translationLang: String,
+    val mxmToken: String,
     val wordTiming: Boolean,
     val clockLineFallback: Boolean,
     val rawLyric: Boolean,
@@ -58,6 +59,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     var translationEnabled by remember { mutableStateOf(true) }
     var translationLang by remember { mutableStateOf("ru") }
+    var mxmToken by remember { mutableStateOf("") }
     var wordTimingEnabled by remember { mutableStateOf(false) }
     var clockLineFallbackEnabled by remember { mutableStateOf(true) }
     var rawLyricEnabled by remember { mutableStateOf(true) }
@@ -70,6 +72,7 @@ fun SettingsScreen(
             ProcessingSettings(
                 prefs.getBoolean(UniversalSettingsConstants.KEY_TRANSLATION, true),
                 prefs.getString(UniversalSettingsConstants.KEY_TRANSLATION_LANG, "ru") ?: "ru",
+                prefs.getString(UniversalSettingsConstants.KEY_MUSIXMATCH_TOKEN, "") ?: "",
                 prefs.getBoolean(UniversalSettingsConstants.KEY_WORD_TIMING, false),
                 prefs.getBoolean(UniversalSettingsConstants.KEY_CLOCK_LINE_FALLBACK, true),
                 prefs.getBoolean(UniversalSettingsConstants.KEY_RAW_LYRIC, true),
@@ -78,6 +81,7 @@ fun SettingsScreen(
         }
         translationEnabled = settings.translation
         translationLang = settings.translationLang
+        mxmToken = settings.mxmToken
         wordTimingEnabled = settings.wordTiming
         clockLineFallbackEnabled = settings.clockLineFallback
         rawLyricEnabled = settings.rawLyric
@@ -89,6 +93,7 @@ fun SettingsScreen(
         val settings = ProcessingSettings(
             translationEnabled,
             translationLang,
+            mxmToken.trim(),
             wordTimingEnabled,
             clockLineFallbackEnabled,
             rawLyricEnabled,
@@ -100,6 +105,7 @@ fun SettingsScreen(
                 .edit()
                 .putBoolean(UniversalSettingsConstants.KEY_TRANSLATION, settings.translation)
                 .putString(UniversalSettingsConstants.KEY_TRANSLATION_LANG, settings.translationLang)
+                .putString(UniversalSettingsConstants.KEY_MUSIXMATCH_TOKEN, settings.mxmToken)
                 .putBoolean(UniversalSettingsConstants.KEY_WORD_TIMING, settings.wordTiming)
                 .putBoolean(UniversalSettingsConstants.KEY_CLOCK_LINE_FALLBACK, settings.clockLineFallback)
                 .putBoolean(UniversalSettingsConstants.KEY_RAW_LYRIC, settings.rawLyric)
@@ -223,12 +229,40 @@ fun SettingsScreen(
                                 onClick = {
                                     translationLang = code
                                     updateConfig()
-                                    Toast.makeText(context, "Выбран язык: $label. Очистите кэш для обновления.", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Выбран язык: $label. Очистите кэш.", Toast.LENGTH_SHORT).show()
                                 },
                                 label = { Text(label) }
                             )
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "Токен Musixmatch (необязательно — для обхода лимитов)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = mxmToken,
+                        onValueChange = {
+                            mxmToken = it
+                            updateConfig()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        placeholder = { Text("Вставьте usertoken или оставьте пустым") },
+                        trailingIcon = {
+                            if (mxmToken.isNotEmpty()) {
+                                IconButton(onClick = {
+                                    mxmToken = ""
+                                    updateConfig()
+                                }) {
+                                    Icon(Icons.Filled.Close, contentDescription = "Очистить")
+                                }
+                            }
+                        }
+                    )
                 }
             }
 
