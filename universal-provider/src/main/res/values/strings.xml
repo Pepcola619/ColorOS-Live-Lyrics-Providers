@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Universal Player Provider</string>
-    <string name="monitor_activity_label">通用播放器Provider</string>
+    <string name="monitor_activity_label">Universal Player Provider</string>
     <string name="nls_service_label">通用歌词会话监听</string>
     <string name="nls_purpose">为通用播放器提供ColorOS锁屏岛歌词</string>
     <string name="bluetooth_lyrics_warning">已知限制：请关闭播放器的蓝牙歌词/车载歌词功能。两者同时启用可能导致首曲无歌词、识别延迟或错误匹配。</string>
@@ -14,7 +14,7 @@
     <string name="nav_players">播放器</string>
     <string name="nav_search">搜索</string>
     <string name="nav_settings">设置</string>
-    <string name="home_title">通用播放器Provider</string>
+    <string name="home_title">Universal Player Provider</string>
     <string name="action_refresh">刷新</string>
     <string name="waiting_playback">等待播放</string>
     <string name="album_artist_placeholder">专辑 · 歌手</string>
