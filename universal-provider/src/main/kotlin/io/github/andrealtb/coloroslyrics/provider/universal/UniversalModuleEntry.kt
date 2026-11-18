@@ -721,6 +721,13 @@ class UniversalModuleEntry : XposedModule() {
                                     UniversalSnapshotStore.EXTRA_CLOCK_LINE_FALLBACK_ENABLED,
                                     clockLineFallbackEnabled
                                 )
+                                val swapTranslation = intent.getBooleanExtra("extra_swap_translation_enabled", swapTranslationEnabled)
+                                if (swapTranslation != swapTranslationEnabled) {
+                                    swapTranslationEnabled = swapTranslation
+                                    configExecutor.execute {
+                                        runCatching { java.io.File("/data/system/universal_swap_translation.enabled").writeText(if (swapTranslation) "1" else "0") }
+                                    }
+                                }
                                 val priorityChanged = priority != sourcePriority
                                 val wordTimingChanged = wordTiming != wordTimingEnabled
                                 val translationChanged = translation != translationEnabled
