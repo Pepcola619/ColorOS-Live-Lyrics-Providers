@@ -7,7 +7,7 @@ internal object LyricsSourceConfigStore {
     private const val PREFS = "lyrics_sources"
     private const val KEY = "priority"
     /** Every source in its default order; a stored order keeps only the ones the user enabled. */
-    val ALL = listOf("QQ", "NETEASE", "KUGOU", "APPLE_MUSIC")
+    val ALL = listOf("MUSIXMATCH", "QQ", "NETEASE", "KUGOU", "APPLE_MUSIC")
     private val defaults = ALL
 
     fun read(context: Context): List<String> = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
