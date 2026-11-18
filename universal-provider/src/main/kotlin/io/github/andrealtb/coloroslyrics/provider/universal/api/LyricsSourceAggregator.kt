@@ -15,6 +15,7 @@ class LyricsSourceAggregator(
     val netEaseSource: LyricsSource = NetEaseSource(client),
     val appleMusicSource: LyricsSource = AppleMusicLyricSource(client),
     val kugouSource: LyricsSource = KugouSource(client)
+    val musixmatchSource: LyricsSource = MusixmatchSource(client)
 ) {
     companion object {
         // Accessed by app IO jobs, so entering a screen never initializes the network stack.
@@ -22,6 +23,7 @@ class LyricsSourceAggregator(
     }
 
     enum class SourceId(val label: String) {
+        MUSIXMATCH("Musixmatch (Auto-Translate)"),
         QQ("QQ音乐"),
         NETEASE("网易云音乐"),
         KUGOU("酷狗音乐"),
@@ -29,6 +31,7 @@ class LyricsSourceAggregator(
     }
 
     fun source(id: SourceId): LyricsSource = when (id) {
+        SourceId.MUSIXMATCH -> musixmatchSource
         SourceId.QQ -> qqSource
         SourceId.NETEASE -> netEaseSource
         SourceId.KUGOU -> kugouSource
