@@ -1180,54 +1180,6 @@ class UniversalModuleEntry : XposedModule() {
                         }
                     }
 
-                    val alignedTranslation = run {
-                        val primary = io.github.andrealtb.coloroslyrics.provider.universal.api.StructuredLyrics.parseLrc(plainLyric)
-                        val trans = io.github.andrealtb.coloroslyrics.provider.universal.api.StructuredLyrics.parseLrc(rawTrans)
-                        io.github.andrealtb.coloroslyrics.provider.universal.api.StructuredLyrics.toTranslationLrc(
-                            io.github.andrealtb.coloroslyrics.provider.universal.api.StructuredLyrics.merge(primary, trans)
-                        ).takeIf { it.isNotBlank() } ?: rawTrans?.takeIf { it.isNotBlank() }
-                    }
-
-                    val topLyric = if (translationEnabled && swapTranslationEnabled && !alignedTranslation.isNullOrBlank()) {
-                        alignedTranslation
-                    } else {
-                        plainLyric
-                    }
-                    val bottomLyric = if (translationEnabled && swapTranslationEnabled && !alignedTranslation.isNullOrBlank()) {
-                        plainLyric
-                    } else {
-                        alignedTranslation
-                    }
-
-                    val json = JSONObject().apply {
-                        put("songName", result.title)
-                        put("artist", result.artist)
-                        put("album", album.orEmpty())
-                        put("durationMs", durationMs ?: 0L)
-                        put("songId", "universal-$generation")
-                        put("lyricType", 0)
-                        put("id", "")
-                        put("noLyric", false)
-                        put("lyric", topLyric)
-                        if (!swapTranslationEnabled && !result.rawLyric.isNullOrBlank()) {
-                            put("rawLyric", result.rawLyric)
-                        }
-                        if (!swapTranslationEnabled) {
-                            UniversalLyricPayloadPolicy.putTtmlAndFormat(this, result)
-                        }
-                        if (translationEnabled && !bottomLyric.isNullOrBlank()) {
-                            put("transLyric", bottomLyric)
-                            put("translationLyric", bottomLyric)
-                            put("translationLanguageTag", java.util.Locale.forLanguageTag(targetLang).toLanguageTag())
-                        }
-                        put("provider", "io.github.andrealtb.coloroslyrics.provider.universal")
-                        put("source", result.source + transSuffix)
-                        put("sessionGeneration", generation)
-                        put("remark", "[CLLUniversal]")
-                    }.toString()
-
-                        }
-                    }
 
                     val alignedTranslation = run {
                         val primary = io.github.andrealtb.coloroslyrics.provider.universal.api.StructuredLyrics.parseLrc(plainLyric)
@@ -1583,9 +1535,7 @@ class UniversalModuleEntry : XposedModule() {
         }
     }
 
-        private fun loadSwapTranslationEnabled(): Boolean = runCatching {
-        java.io.File("/data/system/universal_swap_translation.enabled").readText().trim() == "1"
-    }.getOrDefault(false)
+        
 
     private fun translateLrcViaGooglePost(
         client: OkHttpClient,
