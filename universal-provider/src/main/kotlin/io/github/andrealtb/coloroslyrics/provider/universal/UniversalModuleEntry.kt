@@ -1221,9 +1221,6 @@ class UniversalModuleEntry : XposedModule() {
                             put("translationLyric", bottomLyric)
                             put("translationLanguageTag", java.util.Locale.forLanguageTag(targetLang).toLanguageTag())
                         }
-
-                        }
-
                         put("provider", "io.github.andrealtb.coloroslyrics.provider.universal")
                         put("source", result.source + transSuffix)
                         put("sessionGeneration", generation)
