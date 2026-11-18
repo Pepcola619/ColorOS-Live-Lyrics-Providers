@@ -114,8 +114,6 @@ class UniversalModuleEntry : XposedModule() {
     @Volatile
     private var translationEnabled: Boolean = loadTranslationEnabled()
     @Volatile
-    private var swapTranslationEnabled: Boolean = loadSwapTranslationEnabled()
-    @Volatile
     private var rawLyricEnabled: Boolean = loadRawLyricEnabled()
     @Volatile
     private var debugEnabled: Boolean = loadDebugEnabled()
@@ -644,14 +642,6 @@ class UniversalModuleEntry : XposedModule() {
                     addAction(UniversalSnapshotStore.ACTION_UPDATE_PLAYER_BINDINGS)
                     addAction(UniversalSnapshotStore.ACTION_INJECT_REAL_LYRIC)
                     addAction(UniversalSnapshotStore.ACTION_UPDATE_SOURCE_CONFIG)
-                val swapTranslation = intent.getBooleanExtra("extra_swap_translation_enabled", swapTranslationEnabled)
-    if (swapTranslation != swapTranslationEnabled) {
-        swapTranslationEnabled = swapTranslation
-        configExecutor.execute {
-            runCatching { java.io.File("/data/system/universal_swap_translation.enabled").writeText(if (swapTranslation) "1" else "0") }
-        }
-    }
-    
                     addAction(UniversalSnapshotStore.ACTION_CLEAR_CACHE)
                     addAction(UniversalFeatureConfig.ACTION_UPDATE)
                 }
@@ -1617,11 +1607,5 @@ class UniversalModuleEntry : XposedModule() {
         }
         return true
     }
-     private fun loadSwapTranslationEnabled(): Boolean = runCatching {
-        java.io.File("/data/system/universal_swap_translation.enabled").readText().trim() == "1"
-    }.getOrDefault(false)
- 
 
 }
-
-
