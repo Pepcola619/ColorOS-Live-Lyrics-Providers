@@ -19,6 +19,20 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
+      - name: Generate persistent keystore if missing
+        run: |
+          if [ ! -f universal-provider/persistent-debug.jks ]; then
+            keytool -genkey -v -keystore universal-provider/persistent-debug.jks \
+              -storepass android123 -keypass android123 -alias mykey \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=ColorOSLyrics, OU=Dev, O=User, L=Moscow, S=Moscow, C=RU"
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@://github.com"
+            git add universal-provider/persistent-debug.jks
+            git commit -m "Add persistent signing keystore"
+            git push
+          fi
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
