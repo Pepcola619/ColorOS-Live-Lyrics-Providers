@@ -1179,12 +1179,6 @@ class UniversalModuleEntry : XposedModule() {
                         ).takeIf { it.isNotBlank() } ?: rawTrans?.takeIf { it.isNotBlank() }
                     }
 
-                    val finalLyric = if (translationEnabled && !alignedTranslation.isNullOrBlank()) {
-                        mergeOriginalAndTranslation(plainLyric, alignedTranslation)
-                    } else {
-                        plainLyric
-                    }
-
                     val json = JSONObject().apply {
                         put("songName", result.title)
                         put("artist", result.artist)
@@ -1194,18 +1188,17 @@ class UniversalModuleEntry : XposedModule() {
                         put("lyricType", 0)
                         put("id", "")
                         put("noLyric", false)
-                        put("lyric", finalLyric)
-                        if (!translationEnabled || alignedTranslation.isNullOrBlank()) {
-                            if (!result.rawLyric.isNullOrBlank()) {
-                                put("rawLyric", result.rawLyric)
-                            }
-                            UniversalLyricPayloadPolicy.putTtmlAndFormat(this, result)
-                        } else {
-                            put("rawLyric", finalLyric)
+                        put("lyric", plainLyric)
+                        if (!result.rawLyric.isNullOrBlank()) {
+                            put("rawLyric", result.rawLyric)
+                        }
+                        UniversalLyricPayloadPolicy.putTtmlAndFormat(this, result)
+                        if (translationEnabled && !alignedTranslation.isNullOrBlank()) {
                             put("transLyric", alignedTranslation)
                             put("translationLyric", alignedTranslation)
                             put("translationLanguageTag", java.util.Locale.forLanguageTag(targetLang).toLanguageTag())
                         }
+
                         put("provider", "io.github.andrealtb.coloroslyrics.provider.universal")
                         put("source", result.source + transSuffix)
                         put("sessionGeneration", generation)
