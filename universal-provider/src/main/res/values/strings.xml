@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">通用播放器Provider</string>
+    <string name="app_name">Universal Player Provider</string>
     <string name="monitor_activity_label">通用播放器Provider</string>
     <string name="nls_service_label">通用歌词会话监听</string>
     <string name="nls_purpose">为通用播放器提供ColorOS锁屏岛歌词</string>
