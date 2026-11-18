@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,7 +14,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
@@ -30,10 +30,21 @@ import kotlinx.coroutines.withContext
 
 private data class ProcessingSettings(
     val translation: Boolean,
+    val translationLang: String,
     val wordTiming: Boolean,
     val clockLineFallback: Boolean,
     val rawLyric: Boolean,
     val debug: Boolean
+)
+
+private val TRANSLATION_LANGUAGES = listOf(
+    "ru" to "Русский (ru)",
+    "en" to "English (en)",
+    "es" to "Español (es)",
+    "de" to "Deutsch (de)",
+    "uk" to "Українська (uk)",
+    "zh" to "中文 (zh)",
+    "system" to "Системный"
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,16 +57,19 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     var translationEnabled by remember { mutableStateOf(true) }
+    var translationLang by remember { mutableStateOf("ru") }
     var wordTimingEnabled by remember { mutableStateOf(false) }
     var clockLineFallbackEnabled by remember { mutableStateOf(true) }
     var rawLyricEnabled by remember { mutableStateOf(true) }
     var debugEnabled by remember { mutableStateOf(false) }
     var settingsLoaded by remember { mutableStateOf(false) }
+
     LaunchedEffect(Unit) {
         val settings = withContext(UniversalAppIo.dispatcher) {
             val prefs = context.getSharedPreferences(UniversalSettingsConstants.PREFS_NAME, Context.MODE_PRIVATE)
             ProcessingSettings(
                 prefs.getBoolean(UniversalSettingsConstants.KEY_TRANSLATION, true),
+                prefs.getString(UniversalSettingsConstants.KEY_TRANSLATION_LANG, "ru") ?: "ru",
                 prefs.getBoolean(UniversalSettingsConstants.KEY_WORD_TIMING, false),
                 prefs.getBoolean(UniversalSettingsConstants.KEY_CLOCK_LINE_FALLBACK, true),
                 prefs.getBoolean(UniversalSettingsConstants.KEY_RAW_LYRIC, true),
@@ -63,6 +77,7 @@ fun SettingsScreen(
             )
         }
         translationEnabled = settings.translation
+        translationLang = settings.translationLang
         wordTimingEnabled = settings.wordTiming
         clockLineFallbackEnabled = settings.clockLineFallback
         rawLyricEnabled = settings.rawLyric
@@ -73,6 +88,7 @@ fun SettingsScreen(
     fun updateConfig() {
         val settings = ProcessingSettings(
             translationEnabled,
+            translationLang,
             wordTimingEnabled,
             clockLineFallbackEnabled,
             rawLyricEnabled,
@@ -83,6 +99,7 @@ fun SettingsScreen(
             appContext.getSharedPreferences(UniversalSettingsConstants.PREFS_NAME, Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean(UniversalSettingsConstants.KEY_TRANSLATION, settings.translation)
+                .putString(UniversalSettingsConstants.KEY_TRANSLATION_LANG, settings.translationLang)
                 .putBoolean(UniversalSettingsConstants.KEY_WORD_TIMING, settings.wordTiming)
                 .putBoolean(UniversalSettingsConstants.KEY_CLOCK_LINE_FALLBACK, settings.clockLineFallback)
                 .putBoolean(UniversalSettingsConstants.KEY_RAW_LYRIC, settings.rawLyric)
@@ -137,9 +154,10 @@ fun SettingsScreen(
             )
         )
 
-        androidx.compose.material3.OutlinedButton(
+        OutlinedButton(
             onClick = onOpenRuntimeDiagnostics, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
         ) { Text("Provider 运行诊断（只读）") }
+
         Text(stringResource(R.string.section_source_priority), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 12.dp, bottom = 8.dp))
 
         ListItem(
@@ -178,6 +196,42 @@ fun SettingsScreen(
                 }
             )
 
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp)),
+                color = MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    Text(
+                        text = "Язык перевода (Musixmatch + автоперевод)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TRANSLATION_LANGUAGES.forEach { (code, label) ->
+                            FilterChip(
+                                selected = translationLang == code,
+                                enabled = settingsLoaded && translationEnabled,
+                                onClick = {
+                                    translationLang = code
+                                    updateConfig()
+                                    Toast.makeText(context, "Выбран язык: $label. Очистите кэш для обновления.", Toast.LENGTH_SHORT).show()
+                                },
+                                label = { Text(label) }
+                            )
+                        }
+                    }
+                }
+            }
+
             ListItem(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -211,7 +265,6 @@ fun SettingsScreen(
                 trailingContent = {
                     Switch(
                         checked = clockLineFallbackEnabled,
-                        // Only word timing can fall back; line timing is already published otherwise.
                         enabled = settingsLoaded && wordTimingEnabled,
                         onCheckedChange = {
                             clockLineFallbackEnabled = it
