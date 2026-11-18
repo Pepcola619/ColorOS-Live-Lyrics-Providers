@@ -1189,6 +1189,17 @@ class UniversalModuleEntry : XposedModule() {
                         ).takeIf { it.isNotBlank() } ?: rawTrans?.takeIf { it.isNotBlank() }
                     }
 
+                    val topLyric = if (translationEnabled && swapTranslationEnabled && !alignedTranslation.isNullOrBlank()) {
+                        alignedTranslation
+                    } else {
+                        plainLyric
+                    }
+                    val bottomLyric = if (translationEnabled && swapTranslationEnabled && !alignedTranslation.isNullOrBlank()) {
+                        plainLyric
+                    } else {
+                        alignedTranslation
+                    }
+
                     val json = JSONObject().apply {
                         put("songName", result.title)
                         put("artist", result.artist)
@@ -1198,15 +1209,19 @@ class UniversalModuleEntry : XposedModule() {
                         put("lyricType", 0)
                         put("id", "")
                         put("noLyric", false)
-                        put("lyric", plainLyric)
-                        if (!result.rawLyric.isNullOrBlank()) {
+                        put("lyric", topLyric)
+                        if (!swapTranslationEnabled && !result.rawLyric.isNullOrBlank()) {
                             put("rawLyric", result.rawLyric)
                         }
-                        UniversalLyricPayloadPolicy.putTtmlAndFormat(this, result)
-                        if (translationEnabled && !alignedTranslation.isNullOrBlank()) {
-                            put("transLyric", alignedTranslation)
-                            put("translationLyric", alignedTranslation)
+                        if (!swapTranslationEnabled) {
+                            UniversalLyricPayloadPolicy.putTtmlAndFormat(this, result)
+                        }
+                        if (translationEnabled && !bottomLyric.isNullOrBlank()) {
+                            put("transLyric", bottomLyric)
+                            put("translationLyric", bottomLyric)
                             put("translationLanguageTag", java.util.Locale.forLanguageTag(targetLang).toLanguageTag())
+                        }
+
                         }
 
                         put("provider", "io.github.andrealtb.coloroslyrics.provider.universal")
