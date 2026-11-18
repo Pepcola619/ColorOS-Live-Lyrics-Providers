@@ -28,6 +28,11 @@ import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
 import java.lang.reflect.Field
 import java.lang.reflect.Method
+import okhttp3.FormBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.util.concurrent.TimeUnit
+import org.json.JSONArray
 import org.json.JSONObject
 
 class UniversalModuleEntry : XposedModule() {
@@ -1133,17 +1138,53 @@ class UniversalModuleEntry : XposedModule() {
                     instrumental = instrumental,
                     transientFailure = report.transientFailure && !usable
                 )
-                if (outcome == NoLyricPolicy.Outcome.PUBLISH_LYRICS && result != null) {
+                                if (outcome == NoLyricPolicy.Outcome.PUBLISH_LYRICS && result != null) {
                     val plainLyric = UniversalLyricPayloadPolicy.stripWordTiming(result.lyric)
+                    val targetLang = UniversalSettingsConstants.resolveTargetLanguage(currentSystemContext())
+                    var rawTrans = result.translationLyric
+                    var transSuffix = ""
+
+                    if (translationEnabled && needsTranslation(plainLyric, targetLang)) {
+                        if (isTranslationMissingOrWrongLang(rawTrans, targetLang)) {
+                            val httpClient = OkHttpClient.Builder()
+                                .connectTimeout(10, TimeUnit.SECONDS)
+                                .readTimeout(15, TimeUnit.SECONDS)
+                                .build()
+                            val googleRes = translateLrcViaGooglePost(httpClient, plainLyric, targetLang)
+                            if (googleRes.first != null) {
+                                rawTrans = googleRes.first
+                                transSuffix = "+$targetLang"
+                            } else {
+                                val unisonRes = runCatching {
+                                    io.github.andrealtb.coloroslyrics.provider.universal.api.UnisonTranslationSource(httpClient)
+                                        .translate(plainLyric, targetLang)
+                                }.getOrNull()
+                                if (!isTranslationMissingOrWrongLang(unisonRes, targetLang)) {
+                                    rawTrans = unisonRes
+                                    transSuffix = "+$targetLang(u)"
+                                } else {
+                                    transSuffix = "[trErr:${googleRes.second}]"
+                                }
+                            }
+                        } else {
+                            transSuffix = "+$targetLang(mxm)"
+                        }
+                    }
+
                     val alignedTranslation = run {
                         val primary = io.github.andrealtb.coloroslyrics.provider.universal.api.StructuredLyrics.parseLrc(plainLyric)
-                        val trans = io.github.andrealtb.coloroslyrics.provider.universal.api.StructuredLyrics.parseLrc(result.translationLyric)
+                        val trans = io.github.andrealtb.coloroslyrics.provider.universal.api.StructuredLyrics.parseLrc(rawTrans)
                         io.github.andrealtb.coloroslyrics.provider.universal.api.StructuredLyrics.toTranslationLrc(
                             io.github.andrealtb.coloroslyrics.provider.universal.api.StructuredLyrics.merge(primary, trans)
-                        ).takeIf { it.isNotBlank() }
+                        ).takeIf { it.isNotBlank() } ?: rawTrans?.takeIf { it.isNotBlank() }
                     }
-                    // Cache the complete payload; publishing applies the processing switches, so
-                    // turning a switch back on does not need a cache clear.
+
+                    val finalLyric = if (translationEnabled && !alignedTranslation.isNullOrBlank()) {
+                        mergeOriginalAndTranslation(plainLyric, alignedTranslation)
+                    } else {
+                        plainLyric
+                    }
+
                     val json = JSONObject().apply {
                         put("songName", result.title)
                         put("artist", result.artist)
@@ -1153,21 +1194,24 @@ class UniversalModuleEntry : XposedModule() {
                         put("lyricType", 0)
                         put("id", "")
                         put("noLyric", false)
-                        put("lyric", plainLyric)
-                        if (!result.rawLyric.isNullOrBlank()) {
-                            put("rawLyric", result.rawLyric)
-                        }
-                        UniversalLyricPayloadPolicy.putTtmlAndFormat(this, result)
-                        if (!alignedTranslation.isNullOrBlank()) {
+                        put("lyric", finalLyric)
+                        if (!translationEnabled || alignedTranslation.isNullOrBlank()) {
+                            if (!result.rawLyric.isNullOrBlank()) {
+                                put("rawLyric", result.rawLyric)
+                            }
+                            UniversalLyricPayloadPolicy.putTtmlAndFormat(this, result)
+                        } else {
+                            put("rawLyric", finalLyric)
                             put("transLyric", alignedTranslation)
                             put("translationLyric", alignedTranslation)
-                            put("translationLanguageTag", java.util.Locale.getDefault().toLanguageTag())
+                            put("translationLanguageTag", java.util.Locale.forLanguageTag(targetLang).toLanguageTag())
                         }
                         put("provider", "io.github.andrealtb.coloroslyrics.provider.universal")
-                        put("source", result.source)
+                        put("source", result.source + transSuffix)
                         put("sessionGeneration", generation)
                         put("remark", "[CLLUniversal]")
                     }.toString()
+
 
                     saveCachedLyric(title, artist, json)
                     val published = applyFetchedLyric(ownerPackage, generation, json, title, artist)
@@ -1446,4 +1490,129 @@ class UniversalModuleEntry : XposedModule() {
     private fun clearCache(): Int {
         return UniversalLyricCache.clear().songs
     }
+        private fun mergeOriginalAndTranslation(originalLrc: String, translationLrc: String): String {
+        val timeRegex = Regex("""^(\[\d{1,2}:\d{2}(?:\.\d{1,3})?\])+""")
+        val transMap = LinkedHashMap<String, String>()
+        val transList = mutableListOf<String>()
+
+        for (line in translationLrc.lines()) {
+            val trimmed = line.trim()
+            if (trimmed.isBlank()) continue
+            val match = timeRegex.find(trimmed)
+            val tag = match?.value.orEmpty()
+            val body = trimmed.removePrefix(tag).trim()
+            if (body.isNotBlank() && !body.startsWith("[")) {
+                if (tag.isNotBlank()) transMap[tag] = body
+                transList.add(body)
+            }
+        }
+        if (transMap.isEmpty() && transList.isEmpty()) return originalLrc
+
+        var lineIdx = 0
+        return originalLrc.lines().joinToString("\n") { line ->
+            val trimmed = line.trim()
+            val match = timeRegex.find(trimmed)
+            if (match == null) {
+                line
+            } else {
+                val tag = match.value
+                val origBody = trimmed.removePrefix(tag).trim()
+                if (origBody.isBlank() || origBody.startsWith("[")) {
+                    line
+                } else {
+                    val tr = transMap[tag] ?: transList.getOrNull(lineIdx)
+                    lineIdx++
+                    if (!tr.isNullOrBlank() && !tr.equals(origBody, ignoreCase = true)) {
+                        "$tag $origBody\n$tr"
+                    } else {
+                        line
+                    }
+                }
+            }
+        }
+    }
+
+    private fun translateLrcViaGooglePost(
+        client: OkHttpClient,
+        lrc: String,
+        targetLang: String
+    ): Pair<String?, String> {
+        return try {
+            val timeRegex = Regex("""^(\[\d{1,2}:\d{2}(?:\.\d{1,3})?\])+""")
+            val prefixes = mutableListOf<String>()
+            val textsToTranslate = mutableListOf<String>()
+
+            for (line in lrc.lines()) {
+                val trimmed = line.trim()
+                val match = timeRegex.find(trimmed)
+                val tag = match?.value.orEmpty()
+                val body = trimmed.removePrefix(tag).trim()
+                if (tag.isNotBlank() && body.isNotBlank() && !body.startsWith("[")) {
+                    prefixes.add(tag)
+                    textsToTranslate.add(body)
+                }
+            }
+            if (textsToTranslate.isEmpty()) return Pair(null, "emptyLines")
+
+            val formBody = FormBody.Builder()
+                .add("client", "gtx")
+                .add("sl", "auto")
+                .add("tl", targetLang)
+                .add("dt", "t")
+                .add("q", textsToTranslate.joinToString("\n"))
+                .build()
+
+            val req = Request.Builder()
+                .url("https://googleapis.com")
+                .post(formBody)
+                .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
+                .build()
+
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return Pair(null, "http${resp.code}")
+                val raw = resp.body?.string().orEmpty()
+                if (raw.isBlank()) return Pair(null, "emptyBody")
+
+                val root = JSONArray(raw)
+                val sentences = root.optJSONArray(0) ?: return Pair(null, "noArray")
+                val sb = StringBuilder()
+                for (i in 0 until sentences.length()) {
+                    sb.append(sentences.optJSONArray(i)?.optString(0).orEmpty())
+                }
+                val translatedLines = sb.toString().lines()
+                if (translatedLines.isEmpty()) return Pair(null, "noLines")
+
+                val resultLrc = buildString {
+                    for (i in prefixes.indices) {
+                        val tr = translatedLines.getOrNull(i)?.trim().orEmpty()
+                        if (tr.isNotBlank()) {
+                            append(prefixes[i]).append(" ").append(tr).append('\n')
+                        }
+                    }
+                }.trim()
+
+                if (resultLrc.isBlank()) Pair(null, "blankOut") else Pair(resultLrc, "ok")
+            }
+        } catch (e: Exception) {
+            Pair(null, e.javaClass.simpleName)
+        }
+    }
+
+    private fun isTranslationMissingOrWrongLang(trans: String?, targetLang: String): Boolean {
+        if (trans.isNullOrBlank()) return true
+        if (targetLang == "ru" || targetLang == "uk") {
+            return !trans.any { it in 'А'..'я' || it == 'Ё' || it == 'ё' || it == 'І' || it == 'і' || it == 'Ї' || it == 'ї' || it == 'Є' || it == 'є' }
+        }
+        return false
+    }
+
+    private fun needsTranslation(text: String, targetLang: String): Boolean {
+        if (targetLang == "ru" || targetLang == "uk") {
+            val cyr = text.count { it in 'А'..'я' || it == 'Ё' || it == 'ё' }
+            val lat = text.count { it in 'A'..'Z' || it in 'a'..'z' }
+            return lat > cyr * 2
+        }
+        return true
+    }
+
 }
