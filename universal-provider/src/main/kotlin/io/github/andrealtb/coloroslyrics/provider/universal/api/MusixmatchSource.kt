@@ -54,7 +54,7 @@ class MusixmatchSource(baseClient: OkHttpClient) : LyricsSource {
 
     private fun fetchViaMacro(query: TrackQuery): LyricResult? {
         val token = getToken() ?: return null
-        val targetLang = Locale.getDefault().language.ifBlank { "ru" }
+        val targetLang = io.github.andrealtb.coloroslyrics.provider.universal.UniversalSettingsConstants.resolveTargetLanguage(null)
 
         val url = (BASE_URL + "macro.subtitles.get").toHttpUrl().newBuilder()
             .addQueryParameter("format", "json")
