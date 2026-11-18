@@ -30,6 +30,7 @@ import kotlinx.coroutines.withContext
 
 private data class ProcessingSettings(
     val translation: Boolean,
+    val swapTranslation: Boolean,
     val translationLang: String,
     val mxmToken: String,
     val wordTiming: Boolean,
