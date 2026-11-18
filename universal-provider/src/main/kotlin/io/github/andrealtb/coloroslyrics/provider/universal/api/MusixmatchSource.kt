@@ -1,5 +1,7 @@
 package io.github.andrealtb.coloroslyrics.provider.universal.api
 
+import android.content.Context
+import io.github.andrealtb.coloroslyrics.provider.universal.UniversalSettingsConstants
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
@@ -8,11 +10,13 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
-class MusixmatchSource(baseClient: OkHttpClient) : LyricsSource {
+class MusixmatchSource(
+    baseClient: OkHttpClient,
+    private val contextProvider: () -> Context? = { null }
+) : LyricsSource {
     override val name: String = "musixmatch"
 
     private val cookieStore = ConcurrentHashMap<String, List<Cookie>>()
@@ -53,8 +57,9 @@ class MusixmatchSource(baseClient: OkHttpClient) : LyricsSource {
     }
 
     private fun fetchViaMacro(query: TrackQuery): LyricResult? {
-        val token = getToken() ?: return null
-        val targetLang = io.github.andrealtb.coloroslyrics.provider.universal.UniversalSettingsConstants.resolveTargetLanguage(null)
+        val ctx = contextProvider()
+        val token = UniversalSettingsConstants.getCustomMusixmatchToken(ctx) ?: getToken() ?: return null
+        val targetLang = UniversalSettingsConstants.resolveTargetLanguage(ctx)
 
         val url = (BASE_URL + "macro.subtitles.get").toHttpUrl().newBuilder()
             .addQueryParameter("format", "json")
@@ -283,7 +288,7 @@ class MusixmatchSource(baseClient: OkHttpClient) : LyricsSource {
     }
 
     private fun needsTranslation(lrc: String, targetLang: String): Boolean {
-        if (targetLang == "ru") {
+        if (targetLang == "ru" || targetLang == "uk") {
             val cyrillicCount = lrc.count { it in 'А'..'я' || it == 'Ё' || it == 'ё' }
             val latinCount = lrc.count { it in 'A'..'Z' || it in 'a'..'z' }
             return latinCount > cyrillicCount * 2
@@ -291,3 +296,4 @@ class MusixmatchSource(baseClient: OkHttpClient) : LyricsSource {
         return true
     }
 }
+
