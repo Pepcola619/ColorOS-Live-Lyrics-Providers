@@ -114,6 +114,8 @@ class UniversalModuleEntry : XposedModule() {
     @Volatile
     private var translationEnabled: Boolean = loadTranslationEnabled()
     @Volatile
+    private var swapTranslationEnabled: Boolean = loadSwapTranslationEnabled()
+    @Volatile
     private var rawLyricEnabled: Boolean = loadRawLyricEnabled()
     @Volatile
     private var debugEnabled: Boolean = loadDebugEnabled()
