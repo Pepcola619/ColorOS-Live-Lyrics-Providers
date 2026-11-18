@@ -35,16 +35,30 @@ object InstalledAppCatalog {
         val installed = pm.getInstalledApplications(0)
         val jobContext = currentCoroutineContext()
         val items = installed.map { info ->
-            // Leaving the page should stop an unfinished scan, not keep loading every APK.
             jobContext.ensureActive()
             AppItemUi(
                 label = info.loadLabel(pm).toString(),
                 packageName = info.packageName,
                 isSystem = (info.flags and ApplicationInfo.FLAG_SYSTEM) != 0
             )
-        }.sortedBy { it.label.lowercase() }
-        cached = items
-        items
+        }.toMutableList()
+
+        val yandexPkg = "ru.yandex.music"
+        if (items.none { it.packageName == yandexPkg }) {
+            val yandexInfo = runCatching { pm.getApplicationInfo(yandexPkg, 0) }.getOrNull()
+            val yandexLabel = yandexInfo?.loadLabel(pm)?.toString() ?: "Яндекс Музыка"
+            items.add(
+                AppItemUi(
+                    label = yandexLabel,
+                    packageName = yandexPkg,
+                    isSystem = false
+                )
+            )
+        }
+
+        val sorted = items.sortedBy { it.label.lowercase() }
+        cached = sorted
+        sorted
     }
 }
 
