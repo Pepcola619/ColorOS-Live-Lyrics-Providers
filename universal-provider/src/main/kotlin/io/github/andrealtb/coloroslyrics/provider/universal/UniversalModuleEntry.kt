@@ -1617,6 +1617,10 @@ class UniversalModuleEntry : XposedModule() {
         }
         return true
     }
+     private fun loadSwapTranslationEnabled(): Boolean = runCatching {
+        java.io.File("/data/system/universal_swap_translation.enabled").readText().trim() == "1"
+    }.getOrDefault(false)
+ 
 
 }
 
