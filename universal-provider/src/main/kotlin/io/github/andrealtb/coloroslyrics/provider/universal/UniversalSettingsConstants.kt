@@ -24,7 +24,7 @@ object UniversalSettingsConstants {
         return Locale.getDefault().language.ifBlank { "ru" }
     }
 
-    fun getMusixmatchToken(context: Context?): String {
+    fun getCustomMusixmatchToken(context: Context?): String {
         return runCatching {
             context?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 ?.getString(KEY_MUSIXMATCH_TOKEN, "").orEmpty().trim()
