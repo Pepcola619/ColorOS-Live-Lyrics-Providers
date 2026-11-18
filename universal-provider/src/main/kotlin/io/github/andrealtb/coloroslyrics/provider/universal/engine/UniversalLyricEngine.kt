@@ -11,7 +11,10 @@ import io.github.andrealtb.coloroslyrics.provider.universal.api.LyricsSourceAggr
 import io.github.andrealtb.coloroslyrics.provider.universal.api.TrackQuery
 import io.github.andrealtb.coloroslyrics.provider.universal.api.UnisonTranslationSource
 import io.github.andrealtb.coloroslyrics.provider.universal.cache.UniversalLyricCache
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
 import java.util.concurrent.Executors
@@ -37,7 +40,6 @@ class UniversalLyricEngine(
         if (queryKey == lastQueryKey) return
         lastQueryKey = queryKey
 
-        // Check cache first
         val cachedJson = UniversalLyricCache.get(context, title, artist)
         if (!cachedJson.isNullOrBlank() && !io.github.andrealtb.coloroslyrics.provider.universal.NoLyricPolicy.isRetryableMiss(cachedJson)) {
             val updatedJson = updateGeneration(cachedJson, generation)
@@ -66,13 +68,16 @@ class UniversalLyricEngine(
             ) {
                 val translationOn = context.getSharedPreferences(UniversalSettingsConstants.PREFS_NAME, Context.MODE_PRIVATE)
                     .getBoolean(UniversalSettingsConstants.KEY_TRANSLATION, true)
-                val targetLang = Locale.getDefault().language.ifBlank { "ru" }
+                val targetLang = UniversalSettingsConstants.resolveTargetLanguage(context)
 
                 var finalTranslation = result.translationLyric
-                if (translationOn && (finalTranslation.isNullOrBlank() || (targetLang == "ru" && !containsCyrillic(finalTranslation)))) {
-                    if (containsLatin(result.lyric)) {
-                        finalTranslation = UnisonTranslationSource(OkHttpClient())
-                            .translate(result.lyric, targetLang) ?: finalTranslation
+                if (translationOn && isTranslationMissingOrWrongLang(finalTranslation, targetLang)) {
+                    if (needsTranslation(result.lyric, targetLang)) {
+                        val httpClient = OkHttpClient()
+                        finalTranslation = UnisonTranslationSource(httpClient).translate(result.lyric, targetLang)
+                            ?.takeIf { !isTranslationMissingOrWrongLang(it, targetLang) }
+                            ?: translateLrcViaGoogle(httpClient, result.lyric, targetLang)
+                            ?: finalTranslation
                     }
                 }
 
@@ -90,7 +95,7 @@ class UniversalLyricEngine(
                     if (translationOn && !finalTranslation.isNullOrBlank()) {
                         put("transLyric", finalTranslation)
                         put("translationLyric", finalTranslation)
-                        put("translationLanguageTag", Locale.getDefault().toLanguageTag())
+                        put("translationLanguageTag", Locale.forLanguageTag(targetLang).toLanguageTag())
                     }
                     put("provider", "io.github.andrealtb.coloroslyrics.provider.universal")
                     put("source", result.source)
@@ -102,6 +107,76 @@ class UniversalLyricEngine(
                 syncToSystem(ownerPackage, generation, json)
             }
         }
+    }
+
+    private fun translateLrcViaGoogle(client: OkHttpClient, lrc: String, targetLang: String): String? = runCatching {
+        val timeRegex = Regex("""^(\[\d{1,2}:\d{2}(?:\.\d{1,3})?\])+""")
+        val lines = lrc.lines()
+        val prefixes = mutableListOf<String>()
+        val textsToTranslate = mutableListOf<String>()
+
+        for (line in lines) {
+            val match = timeRegex.find(line.trim())
+            val tag = match?.value.orEmpty()
+            val body = line.trim().removePrefix(tag).trim()
+            if (body.isNotBlank() && !body.startsWith("[")) {
+                prefixes.add(tag)
+                textsToTranslate.add(body)
+            }
+        }
+        if (textsToTranslate.isEmpty()) return null
+
+        val joined = textsToTranslate.joinToString("\n")
+        val url = "https://translate.googleapis.com/translate_a/single".toHttpUrl().newBuilder()
+            .addQueryParameter("client", "gtx")
+            .addQueryParameter("sl", "auto")
+            .addQueryParameter("tl", targetLang)
+            .addQueryParameter("dt", "t")
+            .addQueryParameter("q", joined)
+            .build()
+
+        val req = Request.Builder()
+            .url(url)
+            .header("User-Agent", "Mozilla/5.0")
+            .build()
+
+        client.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) return null
+            val root = JSONArray(resp.body?.string().orEmpty())
+            val sentences = root.optJSONArray(0) ?: return null
+            val sb = StringBuilder()
+            for (i in 0 until sentences.length()) {
+                sb.append(sentences.optJSONArray(i)?.optString(0).orEmpty())
+            }
+            val translatedLines = sb.toString().lines()
+            if (translatedLines.isEmpty()) return null
+
+            buildString {
+                for (i in prefixes.indices) {
+                    val tr = translatedLines.getOrNull(i)?.trim().orEmpty()
+                    if (tr.isNotBlank()) {
+                        append(prefixes[i]).append(tr).append('\n')
+                    }
+                }
+            }.trim().takeIf { it.isNotBlank() }
+        }
+    }.getOrNull()
+
+    private fun isTranslationMissingOrWrongLang(trans: String?, targetLang: String): Boolean {
+        if (trans.isNullOrBlank()) return true
+        if (targetLang == "ru" || targetLang == "uk") {
+            return !trans.any { it in 'А'..'я' || it == 'Ё' || it == 'ё' || it == 'І' || it == 'і' || it == 'Ї' || it == 'ї' || it == 'Є' || it == 'є' }
+        }
+        return false
+    }
+
+    private fun needsTranslation(text: String, targetLang: String): Boolean {
+        if (targetLang == "ru" || targetLang == "uk") {
+            val cyr = text.count { it in 'А'..'я' || it == 'Ё' || it == 'ё' }
+            val lat = text.count { it in 'A'..'Z' || it in 'a'..'z' }
+            return lat > cyr * 2
+        }
+        return true
     }
 
     private fun updateGeneration(jsonStr: String, generation: Long): String {
@@ -123,11 +198,4 @@ class UniversalLyricEngine(
         }
         context.sendBroadcast(intent)
     }
-
-    private fun containsCyrillic(text: String): Boolean =
-        text.any { it in 'А'..'я' || it == 'Ё' || it == 'ё' }
-
-    private fun containsLatin(text: String): Boolean =
-        text.count { it in 'A'..'Z' || it in 'a'..'z' } > 15
 }
-
