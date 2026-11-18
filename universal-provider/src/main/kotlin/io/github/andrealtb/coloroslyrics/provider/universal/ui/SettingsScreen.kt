@@ -58,6 +58,7 @@ fun SettingsScreen(
     onOpenRuntimeDiagnostics: () -> Unit
 ) {
     val context = LocalContext.current
+    var swapTranslationEnabled by remember { mutableStateOf(false) }
     var translationEnabled by remember { mutableStateOf(true) }
     var translationLang by remember { mutableStateOf("ru") }
     var mxmToken by remember { mutableStateOf("") }
@@ -72,6 +73,7 @@ fun SettingsScreen(
             val prefs = context.getSharedPreferences(UniversalSettingsConstants.PREFS_NAME, Context.MODE_PRIVATE)
             ProcessingSettings(
                 prefs.getBoolean(UniversalSettingsConstants.KEY_TRANSLATION, true),
+                prefs.getBoolean(UniversalSettingsConstants.KEY_SWAP_TRANSLATION, false),
                 prefs.getString(UniversalSettingsConstants.KEY_TRANSLATION_LANG, "ru") ?: "ru",
                 prefs.getString(UniversalSettingsConstants.KEY_MUSIXMATCH_TOKEN, "") ?: "",
                 prefs.getBoolean(UniversalSettingsConstants.KEY_WORD_TIMING, false),
@@ -81,6 +83,7 @@ fun SettingsScreen(
             )
         }
         translationEnabled = settings.translation
+        swapTranslationEnabled = settings.swapTranslation
         translationLang = settings.translationLang
         mxmToken = settings.mxmToken
         wordTimingEnabled = settings.wordTiming
@@ -105,6 +108,7 @@ fun SettingsScreen(
             appContext.getSharedPreferences(UniversalSettingsConstants.PREFS_NAME, Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean(UniversalSettingsConstants.KEY_TRANSLATION, settings.translation)
+                .putBoolean(UniversalSettingsConstants.KEY_SWAP_TRANSLATION, settings.swapTranslation)
                 .putString(UniversalSettingsConstants.KEY_TRANSLATION_LANG, settings.translationLang)
                 .putString(UniversalSettingsConstants.KEY_MUSIXMATCH_TOKEN, settings.mxmToken)
                 .putBoolean(UniversalSettingsConstants.KEY_WORD_TIMING, settings.wordTiming)
@@ -121,6 +125,7 @@ fun SettingsScreen(
                 putExtra(UniversalSnapshotStore.EXTRA_CLOCK_LINE_FALLBACK_ENABLED, settings.clockLineFallback)
                 putExtra(UniversalSnapshotStore.EXTRA_TRANSLATION_ENABLED, settings.translation)
                 putExtra(UniversalSnapshotStore.EXTRA_RAW_LYRIC_ENABLED, settings.rawLyric)
+                putExtra("extra_swap_translation_enabled", settings.swapTranslation)
                 putExtra(UniversalSnapshotStore.EXTRA_DEBUG_ENABLED, settings.debug)
             })
         }
@@ -182,26 +187,27 @@ fun SettingsScreen(
         Text(stringResource(R.string.section_lyric_processing), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
 
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            ListItem(
+         ListItem(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 72.dp)
-                    .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 8.dp, bottomEnd = 8.dp)),
+                    .clip(RoundedCornerShape(8.dp)),
                 colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                leadingContent = { Icon(Icons.Filled.Translate, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                headlineContent = { Text(stringResource(R.string.inject_translation), style = MaterialTheme.typography.bodyLarge) },
-                supportingContent = { Text(stringResource(R.string.inject_translation_desc), style = MaterialTheme.typography.bodySmall) },
+                leadingContent = { Icon(Icons.Filled.SwapVert, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                headlineContent = { Text("Поменять местами оригинал и перевод", style = MaterialTheme.typography.bodyLarge) },
+                supportingContent = { Text("Перевод будет отображаться сверху крупным текстом, оригинал — снизу", style = MaterialTheme.typography.bodySmall) },
                 trailingContent = {
                     Switch(
-                        checked = translationEnabled,
-                        enabled = settingsLoaded,
+                        checked = swapTranslationEnabled,
+                        enabled = settingsLoaded && translationEnabled,
                         onCheckedChange = {
-                            translationEnabled = it
+                            swapTranslationEnabled = it
                             updateConfig()
                         }
                     )
                 }
             )
+
 
             Surface(
                 modifier = Modifier
