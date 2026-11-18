@@ -1563,7 +1563,7 @@ class UniversalModuleEntry : XposedModule() {
                 .build()
 
             val req = Request.Builder()
-                .url("https://googleapis.com")
+                .url("https://translate.googleapis.com/translate_a/single")
                 .post(formBody)
                 .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
                 .build()
