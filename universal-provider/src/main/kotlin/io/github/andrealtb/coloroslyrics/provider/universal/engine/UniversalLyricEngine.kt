@@ -9,7 +9,9 @@ import io.github.andrealtb.coloroslyrics.provider.universal.UniversalLyricPayloa
 import io.github.andrealtb.coloroslyrics.provider.universal.UniversalSettingsConstants
 import io.github.andrealtb.coloroslyrics.provider.universal.api.LyricsSourceAggregator
 import io.github.andrealtb.coloroslyrics.provider.universal.api.TrackQuery
+import io.github.andrealtb.coloroslyrics.provider.universal.api.UnisonTranslationSource
 import io.github.andrealtb.coloroslyrics.provider.universal.cache.UniversalLyricCache
+import okhttp3.OkHttpClient
 import org.json.JSONObject
 import java.util.Locale
 import java.util.concurrent.Executors
@@ -62,6 +64,18 @@ class UniversalLyricEngine(
             if (result != null && result.lyric.isNotBlank() &&
                 !io.github.andrealtb.coloroslyrics.provider.universal.api.SongMatchScorer.isInstrumentalOrCreditsOnly(result.lyric)
             ) {
+                val translationOn = context.getSharedPreferences(UniversalSettingsConstants.PREFS_NAME, Context.MODE_PRIVATE)
+                    .getBoolean(UniversalSettingsConstants.KEY_TRANSLATION, true)
+                val targetLang = Locale.getDefault().language.ifBlank { "ru" }
+
+                var finalTranslation = result.translationLyric
+                if (translationOn && (finalTranslation.isNullOrBlank() || (targetLang == "ru" && !containsCyrillic(finalTranslation)))) {
+                    if (containsLatin(result.lyric)) {
+                        finalTranslation = UnisonTranslationSource(OkHttpClient())
+                            .translate(result.lyric, targetLang) ?: finalTranslation
+                    }
+                }
+
                 val json = JSONObject().apply {
                     put("songName", result.title)
                     put("artist", result.artist)
@@ -73,11 +87,9 @@ class UniversalLyricEngine(
                     put("lyric", result.lyric)
                     put("rawLyric", result.rawLyric ?: result.lyric)
                     UniversalLyricPayloadPolicy.putTtmlAndFormat(this, result)
-                    val translationOn = context.getSharedPreferences(UniversalSettingsConstants.PREFS_NAME, android.content.Context.MODE_PRIVATE)
-                        .getBoolean(UniversalSettingsConstants.KEY_TRANSLATION, true)
-                    if (translationOn && !result.translationLyric.isNullOrBlank()) {
-                        put("transLyric", result.translationLyric)
-                        put("translationLyric", result.translationLyric)
+                    if (translationOn && !finalTranslation.isNullOrBlank()) {
+                        put("transLyric", finalTranslation)
+                        put("translationLyric", finalTranslation)
                         put("translationLanguageTag", Locale.getDefault().toLanguageTag())
                     }
                     put("provider", "io.github.andrealtb.coloroslyrics.provider.universal")
@@ -111,4 +123,11 @@ class UniversalLyricEngine(
         }
         context.sendBroadcast(intent)
     }
+
+    private fun containsCyrillic(text: String): Boolean =
+        text.any { it in 'А'..'я' || it == 'Ё' || it == 'ё' }
+
+    private fun containsLatin(text: String): Boolean =
+        text.count { it in 'A'..'Z' || it in 'a'..'z' } > 15
 }
+
