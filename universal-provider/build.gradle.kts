@@ -23,6 +23,12 @@ configure<ApplicationExtension> {
     }
 
     signingConfigs {
+        getByName("debug") {
+            storeFile = file("persistent-debug.jks")
+            storePassword = "android123"
+            keyAlias = "mykey"
+            keyPassword = "android123"
+        }
         create("release") {
             storeFile = file(System.getenv("RELEASE_STORE_FILE") ?: "release.jks")
             storePassword = System.getenv("RELEASE_STORE_PASSWORD")
@@ -89,5 +95,5 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation("org.json:json:20240303")
-    testImplementation(kotlin("test"))
+    testImplementation("org.jetbrains.kotlin:kotlin-test")
 }
